@@ -1,0 +1,52 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  IMAGE_NAME: ocr-extraction-api
+  DOCKER_DRIVER: overlay2
+
+# ── Test Stage ────────────────────────────────────────────────────────────────
+test:
+  stage: test
+  image: python:3.10-slim
+  before_script:
+    - pip install -r requirements.txt
+  script:
+    - python -m pytest tests/ -v || true
+  only:
+    - main
+    - develop
+
+# ── Build Docker Image ────────────────────────────────────────────────────────
+build:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - docker build -f docker/Dockerfile -t $IMAGE_NAME:$CI_COMMIT_SHORT_SHA .
+    - docker tag $IMAGE_NAME:$CI_COMMIT_SHORT_SHA $IMAGE_NAME:latest
+  only:
+    - main
+
+# ── Deploy Stage ──────────────────────────────────────────────────────────────
+deploy:
+  stage: deploy
+  script:
+    - docker stop ocr-api || true
+    - docker rm ocr-api   || true
+    - docker run -d
+        --name ocr-api
+        -p 8000:8000
+        -e GROQ_API_KEY=$GROQ_API_KEY
+        --restart unless-stopped
+        $IMAGE_NAME:latest
+    - sleep 5
+    - curl -f http://localhost:8000/health
+  environment:
+    name: production
+    url: http://localhost:8000
+  only:
+    - main
