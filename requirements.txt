@@ -6,6 +6,6 @@ paddleocr==2.7.3
 paddlepaddle==3.0.0
 pdf2image==1.17.0
 pymupdf==1.24.5
-groq==0.9.0
+groq==0.13.0
 numpy==1.26.4
 opencv-python-headless==4.9.0.80
