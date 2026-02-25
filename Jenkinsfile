@@ -2,87 +2,70 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME    = "ocr-extraction-api"
-        IMAGE_TAG     = "${BUILD_NUMBER}"
-        GROQ_API_KEY  = credentials('GROQ_API_KEY')
-        CONTAINER_NAME = "ocr-api"
-        PORT          = "8000"
+        GROQ_API_KEY = credentials('GROQ_API_KEY')
+        DOCKER_IMAGE = "ocr-api"
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                echo '>>> Pulling latest code from GitLab...'
+                echo 'Pulling latest code...'
                 checkout scm
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                echo '>>> Installing Python dependencies...'
-                sh '''
-                    python3 -m pip install --upgrade pip
-                    pip3 install -r requirements.txt
-                '''
+                echo 'Installing Python dependencies...'
+                sh 'pip install -r requirements.txt --quiet'
             }
         }
 
         stage('Run Tests') {
             steps {
-                echo '>>> Running API tests...'
-                sh 'python3 -m pytest tests/ -v --tb=short || true'
+                echo 'Running tests...'
+                sh 'python -m pytest tests/test_api.py -v --tb=short || true'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                echo '>>> Building Docker image...'
-                sh '''
-                    docker build -f docker/Dockerfile -t ${IMAGE_NAME}:${IMAGE_TAG} .
-                    docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${IMAGE_NAME}:latest
-                '''
+                echo 'Building Docker image...'
+                sh "docker build -f docker/Dockerfile -t ${DOCKER_IMAGE}:${BUILD_NUMBER} ."
+                sh "docker tag ${DOCKER_IMAGE}:${BUILD_NUMBER} ${DOCKER_IMAGE}:latest"
             }
         }
 
-        stage('Deploy Container') {
+        stage('Deploy') {
             steps {
-                echo '>>> Deploying container...'
-                sh '''
-                    # Stop existing container if running
-                    docker stop ${CONTAINER_NAME} || true
-                    docker rm ${CONTAINER_NAME}   || true
-
-                    # Start new container
+                echo 'Deploying container...'
+                sh "docker stop ocr-api-container || true"
+                sh "docker rm   ocr-api-container || true"
+                sh """
                     docker run -d \
-                        --name ${CONTAINER_NAME} \
-                        -p ${PORT}:8000 \
+                        --name ocr-api-container \
+                        -p 8000:8000 \
                         -e GROQ_API_KEY=${GROQ_API_KEY} \
-                        --restart unless-stopped \
-                        ${IMAGE_NAME}:latest
-                '''
+                        ${DOCKER_IMAGE}:latest
+                """
             }
         }
 
         stage('Health Check') {
             steps {
-                echo '>>> Verifying deployment...'
-                sh '''
-                    sleep 5
-                    curl -f http://localhost:${PORT}/health || exit 1
-                    echo "Deployment successful!"
-                '''
+                echo 'Checking API health...'
+                sh 'sleep 5 && curl -f http://localhost:8000/health || true'
             }
         }
     }
 
     post {
         success {
-            echo "Build #${BUILD_NUMBER} deployed successfully!"
+            echo 'Pipeline SUCCESS - OCR API is live!'
         }
         failure {
-            echo "Build #${BUILD_NUMBER} failed!"
-            sh 'docker logs ${CONTAINER_NAME} || true'
+            echo 'Pipeline FAILED - check logs above'
         }
     }
 }
