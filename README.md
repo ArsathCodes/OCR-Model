@@ -1,6 +1,16 @@
 # OCR Extraction API
 
-Production-ready OCR service using PaddleOCR + PyMuPDF + Groq LLM.
+Production-ready OCR service using **PaddleOCR + PyMuPDF**.
+
+## Models Used
+
+| Model | Purpose |
+|-------|---------|
+| **PaddleOCR** (PP-OCRv3) | Text detection & recognition for scanned PDFs/images |
+| **PyMuPDF** (fitz) | Native text & table extraction for digital PDFs |
+
+> Digital PDFs → PyMuPDF native extraction (fast, 100% accuracy)  
+> Scanned PDFs → PaddleOCR (PP-OCRv3 det/rec models)
 
 ## Project Structure
 
@@ -8,27 +18,33 @@ Production-ready OCR service using PaddleOCR + PyMuPDF + Groq LLM.
 ocr-project/
 ├── api/
 │   ├── api.py          # FastAPI endpoints
-│   ├── ocr_engine.py   # PaddleOCR wrapper
+│   ├── ocr_engine.py   # PaddleOCR wrapper (scanned docs)
 │   ├── pdf_ex.py       # PyMuPDF extractor
-│   ├── llm_parser.py   # Groq LLM invoice parser
-│   └── parsers.py      # Rule-based fallback parser
+│   └── parsers.py      # Field extraction parser + doc type detection
 ├── docker/
 │   └── Dockerfile
 ├── tests/
 │   └── test_api.py
-├── app.py              # Hugging Face Space
-├── Jenkinsfile         # Jenkins CI/CD
-├── .gitlab-ci.yml      # GitLab CI/CD
-├── requirements.txt
+├── Jenkinsfile
 └── README.md
 ```
+
+## Supported Document Types
+
+| Type | Fields Extracted |
+|------|-----------------|
+| **Invoice** | invoice_number, date, vendor, total_amount, gst, items |
+| **Purchase Order** | po_number, date, delivery_date, vendor, payment_terms, gst, items |
+| **Resume** | name, email, phone, skills, experience, education, certifications |
+| **ID Card** | name, employee_id, designation, department, valid_until, blood_group |
+| **General** | key fields auto-detected |
 
 ## API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/extract/pdf` | Extract from PDF |
-| POST | `/extract/image` | Extract from image |
+| POST | `/extract/pdf` | Extract from PDF (digital + scanned) |
+| POST | `/extract/image` | Extract from image (JPG/PNG) |
 | GET | `/health` | Health check |
 | GET | `/docs` | Swagger UI |
 
@@ -38,14 +54,10 @@ ocr-project/
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Set Groq API key
-export GROQ_API_KEY="your-key-here"   # Linux/Mac
-$env:GROQ_API_KEY = "your-key-here"   # Windows PowerShell
-
-# 3. Start API
+# 2. Start API
 uvicorn api.api:app --reload
 
-# 4. Open Swagger UI
+# 3. Open Swagger UI
 # http://127.0.0.1:8000/docs
 ```
 
@@ -59,30 +71,10 @@ docker build -f docker/Dockerfile -t ocr-api .
 docker run -d \
   --name ocr-api \
   -p 8000:8000 \
-  -e GROQ_API_KEY=your-key-here \
   ocr-api
 
 # Check health
 curl http://localhost:8000/health
-```
-
-## GitLab Setup
-
-```bash
-# 1. Initialize git
-git init
-git remote add origin https://gitlab.com/YOUR_USERNAME/ocr-project.git
-
-# 2. Copy .gitlab-ci.yml to root
-cp .gitlab/.gitlab-ci.yml .gitlab-ci.yml
-
-# 3. Add GROQ_API_KEY in GitLab:
-#    Settings → CI/CD → Variables → Add GROQ_API_KEY
-
-# 4. Push
-git add .
-git commit -m "Initial commit"
-git push -u origin main
 ```
 
 ## Jenkins Setup
@@ -91,34 +83,9 @@ git push -u origin main
 1. Install Jenkins (https://www.jenkins.io)
 2. Install plugins: Git, Docker, Pipeline
 3. New Item → Pipeline
-4. Pipeline script from SCM → Git → your GitLab URL
-5. Add GROQ_API_KEY in Jenkins Credentials
-6. Build Now
+4. Pipeline script from SCM → Git → your repo URL
+5. Build Now
 ```
-
-## Hugging Face Deployment
-
-```bash
-# 1. Install HF CLI
-pip install huggingface_hub
-
-# 2. Login
-huggingface-cli login
-
-# 3. Create Space at https://huggingface.co/new-space
-#    - SDK: Gradio
-#    - Name: ocr-extraction-api
-
-# 4. Push
-git remote add hf https://huggingface.co/spaces/YOUR_USERNAME/ocr-extraction-api
-git push hf main
-```
-
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `GROQ_API_KEY` | Groq API key (free at console.groq.com) |
 
 ## Sample Response
 
@@ -138,12 +105,13 @@ git push hf main
       "gst": "9,534.00",
       "items": [
         {
-          "name": "Cotton Fabric - White (50m Roll)",
-          "hsn": "520811",
-          "quantity": "10",
-          "unit": "Roll",
-          "unit_price": "3500.00",
-          "total": "35000.00"
+          "S.No": "1",
+          "Item Description": "Cotton Fabric - White (50m Roll)",
+          "HSN": "520811",
+          "Qty": "10",
+          "Unit": "Roll",
+          "Rate (Rs.)": "3,500.00",
+          "Amount (Rs.)": "35,000.00"
         }
       ]
     }
