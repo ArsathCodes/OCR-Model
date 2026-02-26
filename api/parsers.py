@@ -259,12 +259,29 @@ def detect_doc_type(text: str) -> str:
     if "cgpa"           in t or "gpa" in t:      score["resume"] += 2
     if "certifications" in t:                    score["resume"] += 1
 
-    # ID Card
+    # ID Card — must have strong signals
     if "identity card"  in t or "id card" in t:  score["id_card"] += 5
-    if "employee id"    in t:                    score["id_card"] += 3
-    if "valid until"    in t or "valid upto" in t: score["id_card"] += 2
-    if "designation"    in t and "department" in t: score["id_card"] += 2
-    if "blood group"    in t:                    score["id_card"] += 2
+    if "employee id"    in t:                    score["id_card"] += 4
+    if "valid until"    in t or "valid upto" in t: score["id_card"] += 3
+    if "blood group"    in t:                    score["id_card"] += 3
+    if "designation"    in t and "department" in t and "employee" in t: score["id_card"] += 3
+
+    # Academic/General signals — reduce ALL scores
+    if "assignment"     in t:
+        score["id_card"] -= 5
+        score["resume"]  -= 5
+        score["invoice"] -= 3
+    if "case study"     in t:
+        score["id_card"] -= 5
+        score["resume"]  -= 5
+    if "course code"    in t:
+        score["id_card"] -= 5
+        score["resume"]  -= 5
+    if "register no"    in t:
+        score["id_card"] -= 3
+        score["resume"]  -= 3
+    if "department of"  in t:
+        score["id_card"] -= 3
 
     best = max(score, key=score.get)
     return best if score[best] >= 2 else "general"
